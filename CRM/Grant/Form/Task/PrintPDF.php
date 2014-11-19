@@ -74,23 +74,9 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
    * @return void
    */
   function buildQuickForm() {
-    // Process grants and assign to TPL
-    $this->addButtons(array(
-        array(
-          'type' => 'next',
-          'name' => ts('Print Grant List as PDFs'),
-          'isDefault' => TRUE,
-        ),
-        array(
-          'type' => 'back',
-          'name' => ts('Back'),
-        ),
-      )
-    );
-  }
-
-  function postProcess() {
+    // Process grants and assign to TPL 
     $grantIds = $this->getVar('_grantIds');
+    $config = CRM_Core_Config::singleton();
     global $base_url;
     foreach ($grantIds as $gid) {
       $values = array();
@@ -137,12 +123,154 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
       $values['amount_total'] = isset($values['amount_total']) ? $values['amount_total'] : '0.00';
       $values['amount_requested'] = isset($values['amount_requested']) ? $values['amount_requested'] : '0.00';
       $values['amount_granted'] = isset($values['amount_granted']) ? $values['amount_granted'] : '0.00';
-      $values['custom'] = $customData;
-
-
+      if (!empty($customData)) {
+        $fileDAO = new CRM_Core_BAO_File();
+        foreach( $customData as $keys => $vals ) {
+          if (($vals['html_type'] == "Text" || 
+               $vals['html_type'] == "Autocomplete-Select" || 
+               $vals['html_type'] == "Radio"|| 
+               $vals['html_type'] == "Select Date") && $vals['data_type'] != "ContactReference") {
+            $values['custom'][$keys]['label'] = $vals['label'];
+            $values['custom'][$keys]['value'] = $vals['value'];
+          } 
+          elseif (($vals['html_type'] == "AdvMulti-Select" || 
+                   $vals['html_type'] == "Multi-Select" || 
+                   $vals['html_type'] == "CheckBox" ) && !empty($vals['value'])) {
+            $key = explode(CRM_Core_DAO::VALUE_SEPARATOR, $vals['value']);
+            $key = array_filter($key);
+            $key = implode(', ', $key);
+            $values['custom'][$keys]['label'] = $vals['label'];
+            $values['custom'][$keys]['value'] = $key;
+          } 
+          elseif ($vals['data_type'] == "ContactReference" && !empty($vals['value'])) {
+            $values['custom'][$keys]['label'] = $vals['label'];
+            $values['custom'][$keys]['value'] = CRM_Contact_BAO_Contact::displayName($vals['value']);
+          } 
+          elseif ($vals['html_type'] == "RichTextEditor") {
+            $values['custom'][$keys]['label'] = $vals['label'];
+            $values['custom'][$keys]['value'] = strip_tags($vals['value']);
+          } 
+          elseif ( $vals['html_type'] == "File" ) {
+            $fileDAO->id = $vals['value'];
+            if( $fileDAO->find(true) ) {
+              $source = $base_url.'/sites/default/files/civicrm/custom/'.$fileDAO->uri; // FIXME: do not use hardcoded paths!
+              $sourcePDF = $config->customFileUploadDir;
+              switch( $fileDAO->mime_type ) {
+              case "text/plain":
+                $raw = file($source);
+                $data = implode('<br>', $raw);
+                // $html .="<tr><td><b>".$vals['label']."<b></td><td>".$data."</td></tr>";
+                $values['custom'][$keys]['label'] = $vals['label'];
+                $values['custom'][$keys]['value'] = $data;
+                break;
+              case "image/jpeg":
+              case "image/png":
+                // $html .="<tr><td><b>".$vals['label']."<b></td><td><img src='".$source."' /></td></tr>";
+                $values['custom'][$keys]['label'] = $vals['label'];
+                $values['custom'][$keys]['value'] = "<img src='".$source."' />";
+              break;
+              case "application/rtf":
+                $raw = file($source);
+                foreach ( $raw as $plain ) {
+                  $text[] = strip_tags($plain);
+                }
+                $data = implode('<br>', $text);
+                $html .="<tr><td><b>Attachment<b></td><td>".$data."</td></tr>";
+                $values['custom'][$keys]['label'] = 'Attachment';
+                $values['custom'][$keys]['value'] = $data;
+                break;
+              case "application/msword":
+                shell_exec('/usr/bin/unoconvtest.sh');
+                $command = 'unoconv -f pdf '.$sourcePDF.$fileDAO->uri;
+                exec($command);
+                $pdfPath = array_filter(explode('/', $attachValue['fullPath']));
+                $lastItem = array_pop($pdfPath);
+                $newItem = str_replace('.doc', '.pdf', $lastItem);
+                array_push($pdfPath, $newItem);
+                $pdfPathNew = implode('/', $pdfPath);
+                $pdfPathNew = '/'.$pdfPathNew;
+                $fileArray[] = $pdfPathNew;
+              default:
+                break;
+              }
+            }
+          }
+        }
+      } 
+      if (!empty($values['attachment'])) {
+        foreach( $values['attachment'] as $attachKey => $attachValue ) {
+          switch( $attachValue['mime_type'] ) {
+          case "image/jpeg":
+          case "image/png":
+            //$html .="<tr><td><b>Attachment<b></td><td><img src=".$base_url."/sites/default/files/civicrm/custom/".$attachValue['fileName']." /></td></tr>";
+            $values['custom'][$keys]['label'] = 'Attachment';
+            $values['custom'][$keys]['value'] = "<img src=".$base_url."/sites/default/files/civicrm/custom/".$attachValue['fileName']." />"; // FIXME: dod not use hardcoded paths!
+          break;
+          case "text/plain":
+            $raw = file($attachValue['fullPath']);
+            $data = implode('<br>', $raw);
+            //$html .="<tr><td><b>Attachment<b></td><td>".$data."</td></tr>";
+            $values['custom'][$keys]['label'] = 'Attachment';
+            $values['custom'][$keys]['value'] = $data;
+            break;
+          case "application/rtf":
+            $raw = file($attachValue['fullPath']);
+            foreach ( $raw as $plain ) {
+              $text[] = strip_tags($plain);
+            }
+            $data = implode('<br>', $text);
+            //$html .="<tr><td><b>Attachment<b></td><td>".$data."</td></tr>";
+            $values['custom'][$keys]['label'] = 'Attachment';
+            $values['custom'][$keys]['value'] = $data;
+            break;
+          case "application/msword":
+            shell_exec('/usr/bin/unoconvtest.sh');
+            $command = 'unoconv -f pdf '.$attachValue['fullPath'];
+            
+            shell_exec($command);
+            //Pulling the file from the directory
+            $pdfPath = array_filter(explode('/', $attachValue['fullPath']));
+            $lastItem = array_pop($pdfPath);
+            $newItem = str_replace('.doc', '.pdf', $lastItem);
+            array_push($pdfPath, $newItem);
+            $pdfPathNew = implode('/', $pdfPath);
+            $pdfPathNew = '/'.$pdfPathNew;
+            $fileArray[] = $pdfPathNew;
+          default:
+            break;
+          }
+        }
+      } 
+      $tplFile = $this->getHookedTemplateFileName();
+      CRM_Core_Smarty::singleton()->assign('values', $values);
+      $out = CRM_Core_Smarty::singleton()->fetch($tplFile);
+      CRM_Core_Error::debug( '$out', $out );
+      exit;
       // Generate PDF
       self::generatePDF($values);
     }
+    $this->addButtons(array(
+        array(
+          'type' => 'next',
+          'name' => ts('Print Grant List as PDFs'),
+          'isDefault' => TRUE,
+        ),
+        array(
+          'type' => 'back',
+          'name' => ts('Back'),
+        ),
+      )
+    );
+  } 
+  /**
+   * @return string
+   */
+  function getHookedTemplateFileName() {
+    return 'PrintGrantPDF/GrantPDF.tpl';
+  }
+
+  function postProcess() {
+   
   }
 
   function generatePDF($values) {
@@ -153,168 +281,25 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
     $config = CRM_Core_Config::singleton();
     $filePath = $config->customFileUploadDir . $fileName;
     $fileArray[] = $filePath;
-    // FIXME: need to process all of this in tpl
-    $html = "
-<html>
-<body>
-<table>
-<tr>
-<td><b>Name</b></td>
-<td>".$values['display_name']."</td>
-</tr>
-<tr>
-<td><b>Grant Application Received Date</b></td>
-<td>".$values['application_received_date']."</td>
-</tr>
-<tr>
-<td><b>Grant Decision Date</b></td>
-<td>".$values['decision_date']."</td>
-</tr>
-<tr>
-<td><b>Grant Money Transferred Date</b></td>
-<td>".$values['money_transfer_date']."</td>
-</tr>
-<tr>
-<td><b>Grant Due Date</b></td>
-<td>".$values['grant_due_date']."</td>
-</tr>
-<tr>
-<td><b>Total Amount</b></td>
-<td>".CRM_Utils_Money::format($values['amount_total'])."</td>
-</tr>
-<tr>
-<td><b>Amount Requested</b></td>
-<td>".CRM_Utils_Money::format($values['amount_requested'])."</td>
-</tr>
-<tr>
-<td><b>Amount Granted</b></td>
-<td>".CRM_Utils_Money::format($values['amount_granted'])."</td>
-</tr>
-<tr>
-<td><b>Rationale</b></td>
-<td>".CRM_Utils_Array::value('rationale', $values)."</td>
-</tr>
-<tr>
-<td><b>Notes</b></td>
-<td>".CRM_Utils_Array::value('noteId', $values)."</td>
-</tr>";
-    $customData = $values['custom'];
-    if( !empty($customData) ){
-      $fileDAO = new CRM_Core_BAO_File();
-      foreach( $customData as $keys => $vals ) {
-        if ( ( $vals['html_type'] == "Text" || $vals['html_type'] == "Autocomplete-Select" || $vals['html_type'] == "Radio"
-               || $vals['html_type'] == "Select Date") && $vals['data_type'] != "ContactReference" ) {
-          $html .="<tr><td><b>".$vals['label']."<b></td><td>".$vals['value']."</td></tr>";
-        } elseif ( ( $vals['html_type'] == "AdvMulti-Select" || $vals['html_type'] == "Multi-Select" || $vals['html_type'] == "CheckBox" ) && !empty($vals['value']) ) {
-            $key = explode(CRM_Core_DAO::VALUE_SEPARATOR, $vals['value']);
-            $key = array_filter($key);
-            $key = implode(', ', $key);
-            $html .="<tr><td><b>".$vals['label']."<b></td><td>".$key."</td></tr>";
-        } elseif ( $vals['data_type'] == "ContactReference" && !empty($vals['value']) ) {
-          $html .="<tr><td><b>".$vals['label']."<b></td><td>".CRM_Contact_BAO_Contact::displayName($vals['value'])."</td></tr>";
-        } elseif ( $vals['html_type'] == "RichTextEditor" ) {
-          $html .="<tr><td><b>".$vals['label']."<b></td><td>".strip_tags($vals['value'])."</td></tr>";
-        } elseif ( $vals['html_type'] == "File" ) {
-          $fileDAO->id = $vals['value'];
-          if( $fileDAO->find(true) ) {
-            $source = $base_url.'sites/default/files/civicrm/custom/'.$fileDAO->uri;
-            $sourcePDF = 'sites/default/files/civicrm/custom/';
-            switch( $fileDAO->mime_type ) {
-            case "text/plain":
-              $raw = file($source);
-              $data = implode('<br>', $raw);
-              $html .="<tr><td><b>".$vals['label']."<b></td><td>".$data."</td></tr>";
-              break;
-            case "image/jpeg":
-            case "image/png":
-              $html .="<tr><td><b>".$vals['label']."<b></td><td><img src='".$source."' /></td></tr>";
-            break;
-            case "application/rtf":
-              $raw = file($source);
-              foreach ( $raw as $plain ) {
-                $text[] = strip_tags($plain);
-              }
-              $data = implode('<br>', $text);
-              $html .="<tr><td><b>Attachment<b></td><td>".$data."</td></tr>";
-              break;
-            case "application/msword":
-              shell_exec('/usr/bin/unoconvtest.sh');
-              $command = 'unoconv -f pdf '.$sourcePDF.$fileDAO->uri;
-              exec($command);
-              $pdfPath = array_filter(explode('/', $attachValue['fullPath']));
-              $lastItem = array_pop($pdfPath);
-              $newItem = str_replace('.doc', '.pdf', $lastItem);
-              array_push($pdfPath, $newItem);
-              $pdfPathNew = implode('/', $pdfPath);
-              $pdfPathNew = '/'.$pdfPathNew;
-              $fileArray[] = $pdfPathNew;
-            default:
-              break;
-            }
-          }
-        }
-      }
-    }
-    if ( !empty($values['attachment']) ) {
-      foreach( $values['attachment'] as $attachKey => $attachValue ) {
-        switch( $attachValue['mime_type'] ) {
-        case "image/jpeg":
-        case "image/png":
-          $html .="<tr><td><b>Attachment<b></td><td><img src=".$base_url."/sites/default/files/civicrm/custom/".$attachValue['fileName']." /></td></tr>";
-        break;
-        case "text/plain":
-          $raw = file($attachValue['fullPath']);
-          $data = implode('<br>', $raw);
-          $html .="<tr><td><b>Attachment<b></td><td>".$data."</td></tr>";
-          break;
-        case "application/rtf":
-          $raw = file($attachValue['fullPath']);
-          foreach ( $raw as $plain ) {
-            $text[] = strip_tags($plain);
-          }
-          $data = implode('<br>', $text);
-          $html .="<tr><td><b>Attachment<b></td><td>".$data."</td></tr>";
-          break;
-        case "application/msword":
-          shell_exec('/usr/bin/unoconvtest.sh');
-          $command = 'unoconv -f pdf '.$attachValue['fullPath'];
-          
-          shell_exec($command);
-          //Pulling the file from the directory
-          $pdfPath = array_filter(explode('/', $attachValue['fullPath']));
-          $lastItem = array_pop($pdfPath);
-          $newItem = str_replace('.doc', '.pdf', $lastItem);
-          array_push($pdfPath, $newItem);
-          $pdfPathNew = implode('/', $pdfPath);
-          $pdfPathNew = '/'.$pdfPathNew;
-          $fileArray[] = $pdfPathNew;
-        default:
-        break;
-      }
-    }
-  } 
-  
-  $html .="
-</table>
-</body>
-</html>";
-  $dompdf = new DOMPDF();
-  
-  $dompdf->load_html($html);
-  $dompdf->render();
-
-  file_put_contents($filePath, $dompdf->output());
-     
-  //$fileArray= array($filePath, $pdfPathNew);
-  $datadir = $config->customFileUploadDir;
-  $outputName = $datadir.'Grants_'.$values['grant_id'].'_'.$values['contact_id'].'.pdf';
-  $cmd = "gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=$outputName ";
+    
+    $dompdf = new DOMPDF();
+    
+    $dompdf->load_html($html);
+    $dompdf->render();
+    
+    file_put_contents($filePath, $dompdf->output());
+    
+    //$fileArray= array($filePath, $pdfPathNew);
+    $datadir = $config->customFileUploadDir;
+    $outputName = $datadir.'Grants_'.$values['grant_id'].'_'.$values['contact_id'].'.pdf';
+    $cmd = "gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=$outputName ";
     foreach($fileArray as $file) {
       $cmd .= $file." ";
     }
-
+    
     $result = shell_exec($cmd);
-  if (file_exists($outputName)) {
+    // Initiate Download
+    if (file_exists($outputName)) {
       header('Content-Description: File Transfer');
       header('Content-Type: application/octet-stream');
       header('Content-Disposition: attachment; filename='.basename($outputName));
@@ -326,8 +311,8 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
       ob_clean();
       flush();
       readfile($outputName);
-      exit;
-  }
+      CRM_Utils_System::civiExit();
+    }
   }
 }
 
