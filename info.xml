@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <extension key="biz.jmaconsulting.printgrantpdfs" type="module">
   <file>printgrantpdfs</file>
-  <name>FIXME</name>
-  <description>FIXME</description>
+  <name>Print Grants as PDF</name>
+  <description>Enhances the print grants to include custom fields and attachments while generating PDFs</description>
   <license>AGPL-3.0</license>
   <maintainer>
     <author>Edsel</author>
