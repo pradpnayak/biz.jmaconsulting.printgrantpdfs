@@ -77,7 +77,7 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
     // Process grants and assign to TPL 
     $grantIds = $this->getVar('_grantIds');
     $config = CRM_Core_Config::singleton();
-    global $base_url;
+    $fileArray = array();
     foreach ($grantIds as $gid) {
       $values = array();
       $params['id'] = $gid;
@@ -153,7 +153,7 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
           elseif ( $vals['html_type'] == "File" ) {
             $fileDAO->id = $vals['value'];
             if( $fileDAO->find(true) ) {
-              $source = $base_url.'/sites/default/files/civicrm/custom/'.$fileDAO->uri; // FIXME: do not use hardcoded paths!
+              $source = CRM_Utils_System::url("civicrm/file", "reset=1&eid=$gid&id=$fileDAO->id", TRUE, NULL, FALSE);
               $sourcePDF = $config->customFileUploadDir;
               switch( $fileDAO->mime_type ) {
               case "text/plain":
@@ -202,16 +202,15 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
           switch( $attachValue['mime_type'] ) {
           case "image/jpeg":
           case "image/png":
-            //$html .="<tr><td><b>Attachment<b></td><td><img src=".$base_url."/sites/default/files/civicrm/custom/".$attachValue['fileName']." /></td></tr>";
-            $values['custom'][$keys]['label'] = 'Attachment';
-            $values['custom'][$keys]['value'] = "<img src=".$base_url."/sites/default/files/civicrm/custom/".$attachValue['fileName']." />"; // FIXME: dod not use hardcoded paths!
+            $source = CRM_Utils_System::url("civicrm/file", "reset=1&eid=".$gid."&id=".$attachValue['fileID']."", TRUE, NULL, FALSE);
+            $values['attach'][$keys]['label'] = 'Attachment';
+            $values['attach'][$keys]['value'] = "<img src='".$source."' />";
           break;
           case "text/plain":
             $raw = file($attachValue['fullPath']);
             $data = implode('<br>', $raw);
-            //$html .="<tr><td><b>Attachment<b></td><td>".$data."</td></tr>";
-            $values['custom'][$keys]['label'] = 'Attachment';
-            $values['custom'][$keys]['value'] = $data;
+            $values['attach'][$keys]['label'] = 'Attachment';
+            $values['attach'][$keys]['value'] = $data;
             break;
           case "application/rtf":
             $raw = file($attachValue['fullPath']);
@@ -219,9 +218,8 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
               $text[] = strip_tags($plain);
             }
             $data = implode('<br>', $text);
-            //$html .="<tr><td><b>Attachment<b></td><td>".$data."</td></tr>";
-            $values['custom'][$keys]['label'] = 'Attachment';
-            $values['custom'][$keys]['value'] = $data;
+            $values['attach'][$keys]['label'] = 'Attachment';
+            $values['attach'][$keys]['value'] = $data;
             break;
           case "application/msword":
             shell_exec('/usr/bin/unoconvtest.sh');
@@ -242,25 +240,26 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
         }
       } 
       $tplFile = $this->getHookedTemplateFileName();
+      unset($values['attachment']);
       CRM_Core_Smarty::singleton()->assign('values', $values);
-      $out = CRM_Core_Smarty::singleton()->fetch($tplFile);
-      CRM_Core_Error::debug( '$out', $out );
-      exit;
       // Generate PDF
-      self::generatePDF($values);
+      $out = CRM_Core_Smarty::singleton()->fetch($tplFile);
+      $files[] = self::generatePDF($values, $out, $fileArray);
     }
-    $this->addButtons(array(
-        array(
-          'type' => 'next',
-          'name' => ts('Print Grant List as PDFs'),
-          'isDefault' => TRUE,
-        ),
-        array(
-          'type' => 'back',
-          'name' => ts('Back'),
-        ),
-      )
-    );
+    $zip = $config->customFileUploadDir . '/Grants_' . date('YmdHis') . '.zip';
+    $export = new CRM_Financial_BAO_ExportFormat();
+    $export->createZip($files, $zip, TRUE);
+    // Initiate Download
+    if (file_exists($zip)) {
+      header('Content-Type: application/zip');
+      header('Content-Disposition: attachment; filename=' . CRM_Utils_File::cleanFileName(basename($zip)));
+      header('Content-Length: ' . filesize($zip));
+      ob_clean();
+      flush();
+      readfile($config->customFileUploadDir . CRM_Utils_File::cleanFileName(basename($zip)));
+      unlink($zip); //delete the zip to avoid clutter.
+      CRM_Utils_System::civiExit();
+    }
   } 
   /**
    * @return string
@@ -269,18 +268,13 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
     return 'PrintGrantPDF/GrantPDF.tpl';
   }
 
-  function postProcess() {
-   
-  }
-
-  function generatePDF($values) {
+  function generatePDF($values, $html, $fileArray) {
     global $base_url;
     require_once("packages/dompdf/dompdf_config.inc.php");
     spl_autoload_register('DOMPDF_autoload');
     $fileName = 'Grant_'.$values['contact_id'].'_'.$values['grant_id'].'.pdf';
     $config = CRM_Core_Config::singleton();
     $filePath = $config->customFileUploadDir . $fileName;
-    $fileArray[] = $filePath;
     
     $dompdf = new DOMPDF();
     
@@ -289,30 +283,19 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
     
     file_put_contents($filePath, $dompdf->output());
     
-    //$fileArray= array($filePath, $pdfPathNew);
-    $datadir = $config->customFileUploadDir;
-    $outputName = $datadir.'Grants_'.$values['grant_id'].'_'.$values['contact_id'].'.pdf';
-    $cmd = "gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=$outputName ";
-    foreach($fileArray as $file) {
-      $cmd .= $file." ";
+    if (!empty($fileArray)) {
+      $fileArray[] = $filePath;
+      //$fileArray= array($filePath, $pdfPathNew);
+      $config->customFileUploadDir.'Grants_'.$values['grant_id'].'_'.$values['contact_id'].'.pdf';
+      $cmd = "gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=$outputName ";
+      foreach($fileArray as $file) {
+        $cmd .= $file." ";
+      }
+      
+      $result = shell_exec($cmd);
     }
-    
-    $result = shell_exec($cmd);
-    // Initiate Download
-    if (file_exists($outputName)) {
-      header('Content-Description: File Transfer');
-      header('Content-Type: application/octet-stream');
-      header('Content-Disposition: attachment; filename='.basename($outputName));
-      header('Content-Transfer-Encoding: binary');
-      header('Expires: 0');
-      header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
-      header('Pragma: public');
-      header('Content-Length: ' . filesize($outputName));
-      ob_clean();
-      flush();
-      readfile($outputName);
-      CRM_Utils_System::civiExit();
-    }
+    return $filePath;
+   
   }
 }
 
