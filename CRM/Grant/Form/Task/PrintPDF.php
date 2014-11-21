@@ -154,7 +154,6 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
             $fileDAO->id = $vals['value'];
             if( $fileDAO->find(true) ) {
               $source = CRM_Utils_System::url("civicrm/file", "reset=1&eid=$gid&id=$fileDAO->id", TRUE, NULL, FALSE);
-              $sourcePDF = $config->customFileUploadDir;
               switch( $fileDAO->mime_type ) {
               case "text/plain":
                 $raw = file($source);
@@ -180,16 +179,10 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
                 $values['custom'][$keys]['value'] = $data;
                 break;
               case "application/msword":
-                shell_exec('/usr/bin/unoconvtest.sh');
-                $command = 'unoconv -f pdf '.$sourcePDF.$fileDAO->uri;
-                exec($command);
-                $pdfPath = array_filter(explode('/', $attachValue['fullPath']));
-                $lastItem = array_pop($pdfPath);
-                $newItem = str_replace('.doc', '.pdf', $lastItem);
-                array_push($pdfPath, $newItem);
-                $pdfPathNew = implode('/', $pdfPath);
-                $pdfPathNew = '/'.$pdfPathNew;
-                $fileArray[] = $pdfPathNew;
+                $originFilePath = $config->customFileUploadDir.$fileDAO->uri;
+                $outputDirPath  = $config->customFileUploadDir;
+                CRM_Unoconv_Unoconv::convertToPdf($originFilePath, $outputDirPath);
+                $fileArray[] = $outputDirPath . str_replace('.doc', '.pdf', $fileDAO->uri);
               default:
                 break;
               }
@@ -222,18 +215,32 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
             $values['attach'][$keys]['value'] = $data;
             break;
           case "application/msword":
-            shell_exec('/usr/bin/unoconvtest.sh');
-            $command = 'unoconv -f pdf '.$attachValue['fullPath'];
-            
-            shell_exec($command);
-            //Pulling the file from the directory
-            $pdfPath = array_filter(explode('/', $attachValue['fullPath']));
-            $lastItem = array_pop($pdfPath);
-            $newItem = str_replace('.doc', '.pdf', $lastItem);
-            array_push($pdfPath, $newItem);
-            $pdfPathNew = implode('/', $pdfPath);
-            $pdfPathNew = '/'.$pdfPathNew;
-            $fileArray[] = $pdfPathNew;
+            $originFilePath = $attachValue['fullPath'];
+            $outputDirPath  = $config->customFileUploadDir;
+            CRM_Unoconv_Unoconv::convertToPdf($originFilePath, $outputDirPath);
+            $fileArray[] = $outputDirPath . str_replace('.doc', '.pdf', $attachValue['fileName']);
+          case "application/vnd.ms-excel": // Work in progress
+            /* require_once ('packages/PHPExcel.php'); */
+            /* $rendererName = PHPExcel_Settings::PDF_RENDERER_DOMPDF; */
+            /* $rendererLibrary = 'DomPDF.php'; */
+            /* $rendererLibraryPath = $config->extensionsDir . '/biz.jmaconsulting.printgrantpdfs/packages/PHPExcel/Writer/PDF/' . $rendererLibrary; */
+            /* $rendererLibraryPath = '/home/edsel/public_html/mrg/sites/all/modules/civicrm/packages/dompdf'; */
+            /* if (!PHPExcel_Settings::setPdfRenderer( */
+            /*                                        $rendererName, */
+            /*                                        $rendererLibraryPath */
+            /*                                        )) { */
+            /*   die('NOTICE: Please set the $rendererName and $rendererLibraryPath values' . */
+            /*       '<br />' . */
+            /*       'at the top of this script as appropriate for your directory structure' */
+            /*       ); */
+            /* } */
+            /* $outputDirPath  = $config->customFileUploadDir; */
+            /* $objPHPexcel = PHPExcel_IOFactory::load($attachValue['fullPath']);  */
+            /* $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'Excel5'); */
+            /* $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'PDF'); */
+            /* $objWriter->setPreCalculateFormulas(false); */
+            /* $objWriter->save($outputDirPath . str_replace('.xls', '.pdf', $attachValue['fileName'])); */
+            /* $fileArray[] = $outputDirPath . str_replace('.xls', '.pdf', $attachValue['fileName']); */
           default:
             break;
           }
@@ -284,18 +291,18 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
     file_put_contents($filePath, $dompdf->output());
     
     if (!empty($fileArray)) {
-      $fileArray[] = $filePath;
-      //$fileArray= array($filePath, $pdfPathNew);
-      $config->customFileUploadDir.'Grants_'.$values['grant_id'].'_'.$values['contact_id'].'.pdf';
-      $cmd = "gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=$outputName ";
+      array_unshift($fileArray, $filePath);
+      $name = 'Grants_'.$values['grant_id'].'_'.$values['contact_id'].'.pdf';
+      $pdf = new CRM_PDFMerger_PDFMerger;
+      $pdfs = '$pdf';
       foreach($fileArray as $file) {
-        $cmd .= $file." ";
+        $pdfs .= '->addPDF("'.$file.'", "all")';
       }
-      
-      $result = shell_exec($cmd);
+      $pdfs .= '->merge("file", "'.$config->customFileUploadDir.$name.'");';
+      eval($pdfs);
+      $filePath = $config->customFileUploadDir . $name;
     }
     return $filePath;
-   
   }
 }
 
