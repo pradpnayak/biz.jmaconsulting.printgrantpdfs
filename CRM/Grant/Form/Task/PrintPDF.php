@@ -182,7 +182,30 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
                 $originFilePath = $config->customFileUploadDir.$fileDAO->uri;
                 $outputDirPath  = $config->customFileUploadDir;
                 CRM_Unoconv_Unoconv::convertToPdf($originFilePath, $outputDirPath);
-                $fileArray[] = $outputDirPath . str_replace('.doc', '.pdf', $fileDAO->uri);
+                $fileArray[] = $outputDirPath . str_replace('.doc', '.pdf', $fileDAO->uri);  
+                break;
+              case "application/vnd.ms-excel":
+                global $civicrm_root;
+                require_once ('packages/PHPExcel.php');
+                $rendererName = PHPExcel_Settings::PDF_RENDERER_DOMPDF;
+                $rendererLibraryPath = $civicrm_root . '/packages/dompdf';
+                if (!PHPExcel_Settings::setPdfRenderer($rendererName,$rendererLibraryPath)) {
+                  CRM_Core_Error::fatal(ts('NOTICE: Please set the $rendererName and $rendererLibraryPath values' .
+                    '<br />' .
+                    'at the top of this script as appropriate for your directory structure'));
+                }
+                $outputDirPath  = $config->customFileUploadDir;
+                $objPHPexcel = PHPExcel_IOFactory::load($config->customFileUploadDir.$fileDAO->uri);
+                $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'Excel5'); 
+                $objPHPexcel->addCellXf(new PHPExcel_Style);
+                $objPHPexcel->addCellStyleXf(new PHPExcel_Style);
+                $objPHPexcel->getDefaultStyle()->getFont()
+                  ->setName('Arila')
+                  ->setSize(10);
+                $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'PDF');
+                $objWriter->setPreCalculateFormulas(false);
+                $objWriter->save($outputDirPath . str_replace('.xls', '.pdf', $fileDAO->uri));
+                $fileArray[] = $outputDirPath . str_replace('.xls', '.pdf', $fileDAO->uri);
               default:
                 break;
               }
@@ -219,28 +242,29 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
             $outputDirPath  = $config->customFileUploadDir;
             CRM_Unoconv_Unoconv::convertToPdf($originFilePath, $outputDirPath);
             $fileArray[] = $outputDirPath . str_replace('.doc', '.pdf', $attachValue['fileName']);
-          case "application/vnd.ms-excel": // Work in progress
-            /* require_once ('packages/PHPExcel.php'); */
-            /* $rendererName = PHPExcel_Settings::PDF_RENDERER_DOMPDF; */
-            /* $rendererLibrary = 'DomPDF.php'; */
-            /* $rendererLibraryPath = $config->extensionsDir . '/biz.jmaconsulting.printgrantpdfs/packages/PHPExcel/Writer/PDF/' . $rendererLibrary; */
-            /* $rendererLibraryPath = '/home/edsel/public_html/mrg/sites/all/modules/civicrm/packages/dompdf'; */
-            /* if (!PHPExcel_Settings::setPdfRenderer( */
-            /*                                        $rendererName, */
-            /*                                        $rendererLibraryPath */
-            /*                                        )) { */
-            /*   die('NOTICE: Please set the $rendererName and $rendererLibraryPath values' . */
-            /*       '<br />' . */
-            /*       'at the top of this script as appropriate for your directory structure' */
-            /*       ); */
-            /* } */
-            /* $outputDirPath  = $config->customFileUploadDir; */
-            /* $objPHPexcel = PHPExcel_IOFactory::load($attachValue['fullPath']);  */
-            /* $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'Excel5'); */
-            /* $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'PDF'); */
-            /* $objWriter->setPreCalculateFormulas(false); */
-            /* $objWriter->save($outputDirPath . str_replace('.xls', '.pdf', $attachValue['fileName'])); */
-            /* $fileArray[] = $outputDirPath . str_replace('.xls', '.pdf', $attachValue['fileName']); */
+            break;
+          case "application/vnd.ms-excel":
+            global $civicrm_root;
+            require_once ('packages/PHPExcel.php');
+            $rendererName = PHPExcel_Settings::PDF_RENDERER_DOMPDF;
+            $rendererLibraryPath = $civicrm_root . '/packages/dompdf';
+            if (!PHPExcel_Settings::setPdfRenderer($rendererName,$rendererLibraryPath)) {
+              CRM_Core_Error::fatal(ts('NOTICE: Please set the $rendererName and $rendererLibraryPath values' .
+                '<br />' .
+                'at the top of this script as appropriate for your directory structure'));
+            }
+            $outputDirPath  = $config->customFileUploadDir;
+            $objPHPexcel = PHPExcel_IOFactory::load($attachValue['fullPath']);
+            $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'Excel5'); 
+            $objPHPexcel->addCellXf(new PHPExcel_Style);
+            $objPHPexcel->addCellStyleXf(new PHPExcel_Style);
+            $objPHPexcel->getDefaultStyle()->getFont()
+              ->setName('Arila')
+              ->setSize(10);
+            $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'PDF');
+            $objWriter->setPreCalculateFormulas(false);
+            $objWriter->save($outputDirPath . str_replace('.xls', '.pdf', $attachValue['fileName']));
+            $fileArray[] = $outputDirPath . str_replace('.xls', '.pdf', $attachValue['fileName']);
           default:
             break;
           }
