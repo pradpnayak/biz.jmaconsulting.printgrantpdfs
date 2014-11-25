@@ -77,8 +77,8 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
     // Process grants and assign to TPL 
     $grantIds = $this->getVar('_grantIds');
     $config = CRM_Core_Config::singleton();
-    $fileArray = array();
     foreach ($grantIds as $gid) {
+      $fileArray = array();
       $values = array();
       $params['id'] = $gid;
       CRM_Grant_BAO_Grant::retrieve($params, $values);
@@ -185,27 +185,7 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
                 $fileArray[] = $outputDirPath . str_replace('.doc', '.pdf', $fileDAO->uri);  
                 break;
               case "application/vnd.ms-excel":
-                global $civicrm_root;
-                require_once ('packages/PHPExcel.php');
-                $rendererName = PHPExcel_Settings::PDF_RENDERER_DOMPDF;
-                $rendererLibraryPath = $civicrm_root . '/packages/dompdf';
-                if (!PHPExcel_Settings::setPdfRenderer($rendererName,$rendererLibraryPath)) {
-                  CRM_Core_Error::fatal(ts('NOTICE: Please set the $rendererName and $rendererLibraryPath values' .
-                    '<br />' .
-                    'at the top of this script as appropriate for your directory structure'));
-                }
-                $outputDirPath  = $config->customFileUploadDir;
-                $objPHPexcel = PHPExcel_IOFactory::load($config->customFileUploadDir.$fileDAO->uri);
-                $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'Excel5'); 
-                $objPHPexcel->addCellXf(new PHPExcel_Style);
-                $objPHPexcel->addCellStyleXf(new PHPExcel_Style);
-                $objPHPexcel->getDefaultStyle()->getFont()
-                  ->setName('Arila')
-                  ->setSize(10);
-                $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'PDF');
-                $objWriter->setPreCalculateFormulas(false);
-                $objWriter->save($outputDirPath . str_replace('.xls', '.pdf', $fileDAO->uri));
-                $fileArray[] = $outputDirPath . str_replace('.xls', '.pdf', $fileDAO->uri);
+                $fileArray[] = self::convertXLStoPDF($fileDAO, 'custom');
               default:
                 break;
               }
@@ -244,27 +224,7 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
             $fileArray[] = $outputDirPath . str_replace('.doc', '.pdf', $attachValue['fileName']);
             break;
           case "application/vnd.ms-excel":
-            global $civicrm_root;
-            require_once ('packages/PHPExcel.php');
-            $rendererName = PHPExcel_Settings::PDF_RENDERER_DOMPDF;
-            $rendererLibraryPath = $civicrm_root . '/packages/dompdf';
-            if (!PHPExcel_Settings::setPdfRenderer($rendererName,$rendererLibraryPath)) {
-              CRM_Core_Error::fatal(ts('NOTICE: Please set the $rendererName and $rendererLibraryPath values' .
-                '<br />' .
-                'at the top of this script as appropriate for your directory structure'));
-            }
-            $outputDirPath  = $config->customFileUploadDir;
-            $objPHPexcel = PHPExcel_IOFactory::load($attachValue['fullPath']);
-            $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'Excel5'); 
-            $objPHPexcel->addCellXf(new PHPExcel_Style);
-            $objPHPexcel->addCellStyleXf(new PHPExcel_Style);
-            $objPHPexcel->getDefaultStyle()->getFont()
-              ->setName('Arila')
-              ->setSize(10);
-            $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'PDF');
-            $objWriter->setPreCalculateFormulas(false);
-            $objWriter->save($outputDirPath . str_replace('.xls', '.pdf', $attachValue['fileName']));
-            $fileArray[] = $outputDirPath . str_replace('.xls', '.pdf', $attachValue['fileName']);
+            $fileArray[] = self::convertXLStoPDF($attachValue, 'attachment');
           default:
             break;
           }
@@ -314,9 +274,10 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
     
     file_put_contents($filePath, $dompdf->output());
     
+    // Merge attachments and files attached to custom fields
     if (!empty($fileArray)) {
       array_unshift($fileArray, $filePath);
-      $name = 'Grants_'.$values['grant_id'].'_'.$values['contact_id'].'.pdf';
+      $name = 'Grants_'.$values['contact_id'].'_'.$values['grant_id'].'.pdf';
       $pdf = new CRM_PDFMerger_PDFMerger;
       $pdfs = '$pdf';
       foreach($fileArray as $file) {
@@ -328,5 +289,38 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
     }
     return $filePath;
   }
-}
 
+  function convertXLStoPDF($xls, $context) {
+    global $civicrm_root;
+    $config = CRM_Core_Config::singleton();
+    require_once ('packages/PHPExcel.php');
+    if ($context == 'custom') {
+      $fileName = $xls->uri;
+      $filePath = $config->customFileUploadDir.$xls->uri;
+    }
+    else {
+      $fileName = $xls['fileName'];
+      $filePath = $xls['fullPath'];
+    }
+
+    $rendererName = PHPExcel_Settings::PDF_RENDERER_DOMPDF;
+    $rendererLibraryPath = $civicrm_root . '/packages/dompdf';
+    if (!PHPExcel_Settings::setPdfRenderer($rendererName,$rendererLibraryPath)) {
+      CRM_Core_Error::fatal(ts('NOTICE: Please set the $rendererName and $rendererLibraryPath values' .
+                               '<br />' .
+                               'at the top of this script as appropriate for your directory structure'));
+    }
+    $outputDirPath  = $config->customFileUploadDir;
+    $objPHPexcel = PHPExcel_IOFactory::load($filePath);
+    $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'Excel5'); 
+    $objPHPexcel->addCellXf(new PHPExcel_Style);
+    $objPHPexcel->addCellStyleXf(new PHPExcel_Style);
+    $objPHPexcel->getDefaultStyle()->getFont()
+      ->setName('Arila')
+      ->setSize(10);
+    $objWriter = PHPExcel_IOFactory::createWriter($objPHPexcel, 'PDF');
+    $objWriter->setPreCalculateFormulas(false);
+    $objWriter->save($outputDirPath . str_replace('.xls', '.pdf', $fileName));
+    return $outputDirPath . str_replace('.xls', '.pdf', $fileName);
+  }
+}
