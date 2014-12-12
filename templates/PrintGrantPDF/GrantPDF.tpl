@@ -1,67 +1,69 @@
 <html>
   <body>
-    <table>
-      <tr>
-	<td><b>Name</b></td>
-	<td>{$values.display_name}</td>
-      </tr>
-      <tr>
-	<td><b>Grant Application Received Date</b></td>
-	<td>{$values.application_received_date}</td>
-      </tr>
-      <tr>
-	<td><b>Grant Decision Date</b></td>
-	<td>{$values.decision_date}</td>
-      </tr>
-      <tr>
-	<td><b>Grant Money Transferred Date</b></td>
-	<td>{$values.money_transfer_date}</td>
-      </tr>
-      <tr>
-	<td><b>Grant Due Date</b></td>
-	<td>{$values.grant_due_date}</td>
-      </tr>
-      <tr>
-	<td><b>Total Amount</b></td>
-	<td>{$values.amount_total|crmMoney}</td>
-      </tr>
-      <tr>
-	<td><b>Amount Requested</b></td>
-	<td>{$values.amount_requested|crmMoney}</td>
-      </tr>
-      <tr>
-	<td><b>Amount Granted</b></td>
-	<td>{$values.amount_granted|crmMoney}</td>
-      </tr>
+    <div>
+      <div>
+	<span><b>Name</b></span>
+	<span>{$values.display_name}</span>
+      </div>
+      <div>
+	<span><b>Grant Application Received Date</b></span>
+	<span>{$values.application_received_date}</span>
+      </div>
+      <div>
+	<span><b>Grant Decision Date</b></span>
+	<span>{$values.decision_date}</span>
+      </div>
+      <div>
+	<span><b>Grant Money Transferred Date</b></span>
+	<span>{$values.money_divansfer_date}</span>
+      </div>
+      <div>
+	<span><b>Grant Due Date</b></span>
+	<span>{$values.grant_due_date}</span>
+      </div>
+      <div>
+	<span><b>Total Amount</b></span>
+	<span>{$values.amount_total|crmMoney}</span>
+      </div>
+      <div>
+	<span><b>Amount Requested</b></span>
+	<span>{$values.amount_requested|crmMoney}</span>
+      </div>
+      <div>
+	<span><b>Amount Granted</b></span>
+	<span>{$values.amount_granted|crmMoney}</span>
+      </div>
       {if $values.rationale}
-      <tr>
-	<td><b>Rationale</b></td>
-	<td>{$values.rationale}</td>
-      </tr>
+      <div>
+	<span><b>Rationale</b></span>
+	<span>{$values.rationale}</span>
+      </div>
       {/if}
       {if $values.noteId}
-      <tr>
-	<td><b>Notes</b></td>
-	<td>{$values.noteId}</td>
-      </tr>
+      <div>
+	<span><b>Notes</b></span>
+	<span>{$values.noteId}</span>
+      </div>
       {/if}
       {if $values.custom}
-      <tr>
+      <div>
 	{foreach from=$values.custom item=field key=id}
-	<td><b>{$field.label}</b></td>
-	<td>{$field.value}</td>
+	<span><b>{$field.label}</b></span>
+	<span>{$field.value}</span>
 	{/foreach}
-      </tr>
+      </div>
       {/if}
       {if $values.attach}
-      <tr>
+      <div>
 	{foreach from=$values.attach item=field key=id}
-	<td><b>{$field.label}</b></td>
-	<td>{$field.value}</td>
+	<span><b>{$field.label}</b></span>
+	<br/>
+	<span>{$field.value}</span>
+	<br/>
 	{/foreach}
-      </tr>
+      </div>
       {/if}
-    </table>
+    </div>
   </body>
 </html>
 	
