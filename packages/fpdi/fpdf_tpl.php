@@ -242,7 +242,7 @@ class FPDF_TPL extends FPDF {
     /**
      * See FPDF/TCPDF-Documentation ;-)
      */
-    function SetFont($family, $style='', $size=0, $fontfile='') {
+    function SetFont($family, $style = '', $size = 0, $fontfile = '', $subset = 'default', $out = true) {
         if (!is_subclass_of($this, 'TCPDF') && func_num_args() > 3) {
             $this->Error('More than 3 arguments for the SetFont method are only available in TCPDF.');
         }
@@ -266,7 +266,7 @@ class FPDF_TPL extends FPDF {
     /**
      * See FPDF/TCPDF-Documentation ;-)
      */
-    function Image($file, $x, $y, $w=0, $h=0, $type='', $link='', $align='', $resize=false, $dpi=300, $palign='', $ismask=false, $imgmask=false, $border=0) {
+    function Image($file, $x = null, $y = null, $w = 0, $h = 0, $type = '', $link = '', $align='', $resize=false, $dpi=300, $palign='', $ismask=false, $imgmask=false, $border=0, $fitbox=false, $hidden=false, $fitonpage=false, $alt=false, $altimgs=array()) {
         if (!is_subclass_of($this, 'TCPDF') && func_num_args() > 7) {
             $this->Error('More than 7 arguments for the Image method are only available in TCPDF.');
         }
