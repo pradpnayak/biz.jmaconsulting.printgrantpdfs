@@ -179,11 +179,12 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
                 $values['custom'][$keys]['value'] = $data;
                 break;
               case "application/msword":
-                $originFilePath = $config->customFileUploadDir.$fileDAO->uri;
-                $outputDirPath  = $config->customFileUploadDir;
-                CRM_Unoconv_Unoconv::convertToPdf($originFilePath, $outputDirPath);
-                $fileArray[] = $outputDirPath . str_replace('.doc', '.pdf', $fileDAO->uri);  
                 break;
+                /* $originFilePath = $config->customFileUploadDir.$fileDAO->uri; */
+                /* $outputDirPath  = $config->customFileUploadDir; */
+                /* CRM_Unoconv_Unoconv::convertToPdf($originFilePath, $outputDirPath); */
+                /* $fileArray[] = $outputDirPath . str_replace('.doc', '.pdf', $fileDAO->uri);   */
+                /* break; */
               case "application/vnd.ms-excel":
                 $fileArray[] = self::convertXLStoPDF($fileDAO, 'custom');
               default:
@@ -218,11 +219,12 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
             $values['attach'][$keys]['value'] = $data;
             break;
           case "application/msword":
-            $originFilePath = $attachValue['fullPath'];
-            $outputDirPath  = $config->customFileUploadDir;
-            CRM_Unoconv_Unoconv::convertToPdf($originFilePath, $outputDirPath);
-            $fileArray[] = $outputDirPath . str_replace('.doc', '.pdf', $attachValue['fileName']);
             break;
+            /* $originFilePath = $attachValue['fullPath']; */
+            /* $outputDirPath  = $config->customFileUploadDir; */
+            /* CRM_Unoconv_Unoconv::convertToPdf($originFilePath, $outputDirPath); */
+            /* $fileArray[] = $outputDirPath . str_replace('.doc', '.pdf', $attachValue['fileName']); */
+            /* break; */
           case "application/vnd.ms-excel":
             $fileArray[] = self::convertXLStoPDF($attachValue, 'attachment');
           default:
