@@ -263,18 +263,21 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
 
   function generatePDF($values, $html, $fileArray) {
     global $base_url;
-    require_once("packages/dompdf/dompdf_config.inc.php");
-    spl_autoload_register('DOMPDF_autoload');
     $fileName = 'Grant_'.$values['contact_id'].'_'.$values['grant_id'].'.pdf';
     $config = CRM_Core_Config::singleton();
     $filePath = $config->customFileUploadDir . $fileName;
-    
-    $dompdf = new DOMPDF();
-    
-    $dompdf->load_html($html);
-    $dompdf->render();
-    
-    file_put_contents($filePath, $dompdf->output());
+    if ($config->wkhtmltopdfPath) {
+      $pdfOut = CRM_Utils_PDF_Utils::html2pdf($html, $filePath, TRUE);
+    }
+    else {
+      require_once("packages/dompdf/dompdf_config.inc.php");
+      spl_autoload_register('DOMPDF_autoload');
+      $dompdf = new DOMPDF();
+      $dompdf->load_html($html);
+      $dompdf->render();
+      $pdfOut = $dompdf->output();
+    }
+    file_put_contents($filePath, $pdfOut);
     
     // Merge attachments and files attached to custom fields
     if (!empty($fileArray)) {
