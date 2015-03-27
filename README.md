@@ -1,6 +1,11 @@
 biz.jmaconsulting.printgrantpdfs
 ================================
 
+Description
+-----------
+
+This extension enhances printing grants to PDFs from Find Grant search results to include custom fields and attachments.
+
 Installation
 ------------
 
