@@ -18,6 +18,7 @@
   <develStage>stable</develStage>
   <compatibility>
     <ver>4.5</ver>
+    <ver>4.6</ver>
   </compatibility>
   <comments>This extension supports printing Grants to PDFs for download. Custom fields and attached files are included in the PDF. Printing Word documents attachments depends on the unoconv library from LibreOffice, which requires about half of LibreOffice to be installed.</comments>
   <civix>
