@@ -1,7 +1,7 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 4.2                                                |
+ | CiviCRM version 4.5                                                |
  +--------------------------------------------------------------------+
  | Copyright CiviCRM LLC (c) 2004-2012                                |
  +--------------------------------------------------------------------+
@@ -46,24 +46,6 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
    */
   function preProcess() {
     parent::preprocess();
-
-    // set print view, so that print templates are called
-    $this->controller->setPrint(1);
-
-    // get the formatted params
-    $queryParams = $this->get('queryParams');
-
-    $sortID = NULL;
-    if ($this->get(CRM_Utils_Sort::SORT_ID)) {
-      $sortID = CRM_Utils_Sort::sortIDValue($this->get(CRM_Utils_Sort::SORT_ID),
-        $this->get(CRM_Utils_Sort::SORT_DIRECTION)
-      );
-    }
-
-    $selector = new CRM_Grant_Selector_Search($queryParams, $this->_action, $this->_componentClause);
-    $controller = new CRM_Core_Selector_Controller($selector, NULL, $sortID, CRM_Core_Action::VIEW, $this, CRM_Core_Selector_Controller::SCREEN);
-    $controller->setEmbedded(TRUE);
-    $controller->run();
   }
 
    /**
@@ -75,38 +57,14 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
    */
   function buildQuickForm() {
     // Process grants and assign to TPL 
-    $grantIds = $this->getVar('_grantIds');
     $config = CRM_Core_Config::singleton();
-    foreach ($grantIds as $gid) {
-      $fileArray = array();
+    $fileArray = array();
+    $pdfTemplate = $this->getPDFMessageTemplate();
+    foreach ($this->_grantIds as $gid) {
       $values = array();
       $params['id'] = $gid;
       CRM_Grant_BAO_Grant::retrieve($params, $values);
       $values['attachment'] = CRM_Core_BAO_File::getEntityFile('civicrm_grant', $gid);
-      $custom = CRM_Core_BAO_CustomValueTable::getEntityValues($gid, 'Grant');
-      $ids = array_keys($custom);
-      $count = 0;
-      foreach( $ids as $key => $val ) {
-        $customData[$count]['label'] = CRM_Core_DAO::getFieldValue("CRM_Core_DAO_CustomField", $val, "label", "id");
-        $customData[$count]['html_type'] = CRM_Core_DAO::getFieldValue("CRM_Core_DAO_CustomField", $val, "html_type", "id");
-        $customData[$count]['data_type'] = CRM_Core_DAO::getFieldValue("CRM_Core_DAO_CustomField", $val, "data_type", "id");
-        $cfParams = array('id' => $val);
-        $cfDefaults = array();
-        CRM_Core_DAO::commonRetrieve('CRM_Core_DAO_CustomField', $cfParams, $cfDefaults);
-        $columnName = $cfDefaults['column_name'];
-        
-        //table name of custom data
-        $tableName = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomGroup',
-                                                 $cfDefaults['custom_group_id'],
-                                                 'table_name', 'id'
-                                                 );
-        
-        //query to fetch id from civicrm_file
-        $query = "SELECT {$columnName} FROM {$tableName} where entity_id = {$gid}";
-        $fileID = CRM_Core_DAO::singleValueQuery($query);
-        $customData[$count]['value'] = $fileID;
-        $count++;
-      }
       if (isset($gid)) {
         $noteDAO = new CRM_Core_BAO_Note();
         $noteDAO->entity_table = 'civicrm_grant';
@@ -123,31 +81,21 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
       $values['amount_total'] = isset($values['amount_total']) ? $values['amount_total'] : '0.00';
       $values['amount_requested'] = isset($values['amount_requested']) ? $values['amount_requested'] : '0.00';
       $values['amount_granted'] = isset($values['amount_granted']) ? $values['amount_granted'] : '0.00';
-      if (!empty($customData)) {
+      
+      $custom = CRM_Core_BAO_CustomValueTable::getEntityValues($gid, 'Grant');
+      if (!empty($custom)) {
         $fileDAO = new CRM_Core_BAO_File();
-        foreach( $customData as $keys => $vals ) {
-          if (($vals['html_type'] == "Text" || 
-               $vals['html_type'] == "Autocomplete-Select" || 
-               $vals['html_type'] == "Radio"|| 
-               $vals['html_type'] == "Select Date") && $vals['data_type'] != "ContactReference") {
-            $values['custom'][$keys]['label'] = $vals['label'];
-            $values['custom'][$keys]['value'] = $vals['value'];
-          } 
-          elseif (($vals['html_type'] == "AdvMulti-Select" || 
-                   $vals['html_type'] == "Multi-Select" || 
-                   $vals['html_type'] == "CheckBox" ) && !empty($vals['value'])) {
-            $key = explode(CRM_Core_DAO::VALUE_SEPARATOR, $vals['value']);
-            $key = array_filter($key);
-            $key = implode(', ', $key);
-            $values['custom'][$keys]['label'] = $vals['label'];
-            $values['custom'][$keys]['value'] = $key;
-          } 
-          elseif ($vals['data_type'] == "ContactReference" && !empty($vals['value'])) {
-            $values['custom'][$keys]['label'] = $vals['label'];
-            $values['custom'][$keys]['value'] = CRM_Contact_BAO_Contact::displayName($vals['value']);
-          } 
+        foreach ($custom as $keys => $cValue) {
+          $vals = array();
+          $cfParams = array('id' => $keys);
+          CRM_Core_DAO::commonRetrieve('CRM_Core_DAO_CustomField', $cfParams, $vals);
+          $vals['data'] = $vals['value'] = $cValue;
+          $values['custom'][$keys]['label'] = $vals['label'];
+          
+          if (!in_array($vals['html_type'], array('RichTextEditor', 'File'))) {
+            $values['custom'][$keys]['value'] = CRM_Core_BAO_CustomGroup::formatCustomValues($vals, $vals);
+          }
           elseif ($vals['html_type'] == "RichTextEditor") {
-            $values['custom'][$keys]['label'] = $vals['label'];
             $values['custom'][$keys]['value'] = strip_tags($vals['value']);
           } 
           elseif ( $vals['html_type'] == "File" ) {
@@ -158,14 +106,10 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
               case "text/plain":
                 $raw = file($source);
                 $data = implode('<br>', $raw);
-                // $html .="<tr><td><b>".$vals['label']."<b></td><td>".$data."</td></tr>";
-                $values['custom'][$keys]['label'] = $vals['label'];
                 $values['custom'][$keys]['value'] = $data;
                 break;
               case "image/jpeg":
               case "image/png":
-                // $html .="<tr><td><b>".$vals['label']."<b></td><td><img src='".$source."' /></td></tr>";
-                $values['custom'][$keys]['label'] = $vals['label'];
                 $values['custom'][$keys]['value'] = "<img src='".$source."' />";
               break;
               case "application/rtf":
@@ -230,11 +174,10 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
           }
         }
       } 
-      $tplFile = $this->getHookedTemplateFileName();
       unset($values['attachment']);
       CRM_Core_Smarty::singleton()->assign('values', $values);
       // Generate PDF
-      $out = CRM_Core_Smarty::singleton()->fetch($tplFile);
+      $out = CRM_Core_Smarty::singleton()->fetch("string:{$pdfTemplate}");
       $files[] = self::generatePDF($values, $out, $fileArray);
     }
     $zip = $config->customFileUploadDir . '/Grants_' . date('YmdHis') . '.zip';
@@ -255,14 +198,20 @@ class CRM_Grant_Form_Task_PrintPDF extends CRM_Grant_Form_Task {
   /**
    * @return string
    */
-  function getHookedTemplateFileName() {
-    return 'PrintGrantPDF/GrantPDF.tpl';
+  function getPDFMessageTemplate() {
+    $query = 'SELECT msg_html html
+      FROM civicrm_msg_template mt
+      JOIN civicrm_option_value ov ON workflow_id = ov.id
+      JOIN civicrm_option_group og ON ov.option_group_id = og.id
+      WHERE og.name = %1 AND ov.name = %2 AND mt.is_default = 1';
+    $sqlParams = array(1 => array('msg_tpl_workflow_grant', 'String'), 2 => array('grant_print_pdf', 'String'));
+    return CRM_Core_DAO::singleValueQuery($query, $sqlParams);
   }
 
   function generatePDF($values, $html, $fileArray) {
-    global $base_url;
-    require_once("packages/dompdf/dompdf_config.inc.php");
-    spl_autoload_register('DOMPDF_autoload');
+    define('DOMPDF_ENABLE_REMOTE', TRUE);
+    define('DOMPDF_ENABLE_AUTOLOAD', FALSE);
+    require_once 'vendor/dompdf/dompdf/dompdf_config.inc.php';
     $fileName = 'Grant_'.$values['contact_id'].'_'.$values['grant_id'].'.pdf';
     $config = CRM_Core_Config::singleton();
     $filePath = $config->customFileUploadDir . $fileName;
